@@ -6,7 +6,8 @@ import 'package:code_builder/code_builder.dart';
 import 'package:dart_style/dart_style.dart';
 import 'package:glob/glob.dart';
 import 'package:path/path.dart';
-import 'package:source_gen/source_gen.dart' show LibraryReader, TypeChecker, defaultFileHeader;
+import 'package:source_gen/source_gen.dart'
+    show LibraryReader, TypeChecker, defaultFileHeader;
 
 import 'constant_reader_utils.dart';
 
@@ -23,7 +24,8 @@ class PlaybookBuilder implements Builder {
 
   @override
   FutureOr<void> build(BuildStep buildStep) async {
-    final storyAssets = buildStep.findAssets(Glob('lib/**.story.dart'));
+    // TODO(wasabeef): For Journey
+    final storyAssets = buildStep.findAssets(Glob('lib/**_vrt.dart'));
     final storyFunctions = <Method>[];
 
     await for (final input in storyAssets) {
@@ -70,8 +72,9 @@ ${storiesLibrary.accept(emitter)}
     final generatedScenarioTypeChecker = TypeChecker.fromUrl(
       'package:playbook/src/generate_scenario.dart#GenerateScenario',
     );
-    final generatedScenarioCodes =
-        storyLibraryReader.annotatedWith(generatedScenarioTypeChecker).where((e) {
+    final generatedScenarioCodes = storyLibraryReader
+        .annotatedWith(generatedScenarioTypeChecker)
+        .where((e) {
       final element = e.element;
       if (!element.isPublic) return false;
       if (element is ClassElement) {
@@ -80,8 +83,13 @@ ${storiesLibrary.accept(emitter)}
               (s) => s.getDisplayString(withNullability: true) == 'Widget',
             );
       } else if (element is FunctionElement) {
-        return element.parameters.isEmpty &&
-            element.returnType.getDisplayString(withNullability: true) == 'Widget';
+        // TODO(wasabeef): For Journey
+        // return !element.parameters.isEmpty &&
+        //     element.parameters.first.getDisplayString(withNullability: true) ==
+        //         'BuildContext' &&
+        //     element.returnType.getDisplayString(withNullability: true) ==
+        //         'Widget';
+        return element.returnType.getDisplayString(withNullability: true) == 'Widget';
       } else {
         return false;
       }
@@ -95,7 +103,7 @@ ${storiesLibrary.accept(emitter)}
 ${a(refer('Scenario', _playbookUrl))}(
   '$titleParam',
   layout: ${constantReaderToSource(annotation.read('layout'), a)},
-  child: ${a(refer(e.element.displayName, uri))}(),
+  child: ${a(refer(e.element.displayName, uri))}(null),
 )''');
     });
 
@@ -104,7 +112,8 @@ ${a(refer('Scenario', _playbookUrl))}(
         .where((e) => e.isPublic && e.parameters.isEmpty)
         .expand<Code>(
       (e) {
-        final returnTypeString = e.returnType.getDisplayString(withNullability: true);
+        final returnTypeString =
+            e.returnType.getDisplayString(withNullability: true);
         final scenarioRefer = refer(e.displayName, uri);
         if (returnTypeString == 'Scenario') {
           return [scenarioRefer([]).code];
@@ -140,7 +149,8 @@ ${a(refer('Scenario', _playbookUrl))}(
   }
 
   Method _createStoriesGetter(List<Method> storyMethods) {
-    final bodyExpression = literalList(storyMethods.map((e) => refer('${e.name}()')));
+    final bodyExpression =
+        literalList(storyMethods.map((e) => refer('${e.name}()')));
     return Method((b) => b
       ..name = 'stories'
       ..type = MethodType.getter
