@@ -23,7 +23,8 @@ class PlaybookBuilder implements Builder {
 
   @override
   FutureOr<void> build(BuildStep buildStep) async {
-    final storyAssets = buildStep.findAssets(Glob('lib/**.story.dart'));
+    // TODO(wasabeef): For Journey
+    final storyAssets = buildStep.findAssets(Glob('lib/**_vrt.dart'));
     final storyFunctions = <Method>[];
 
     await for (final input in storyAssets) {
@@ -86,11 +87,13 @@ ${storiesLibrary.accept(emitter)}
               (s) => s.getDisplayString(withNullability: true) == w,
             );
       } else if (element is FunctionElement) {
-        final firstParam = element.parameters.firstOrNull?.type
-            .getDisplayString(withNullability: false);
-        return element.parameters.length <= 1 &&
-            (firstParam == null || firstParam == bc) &&
-            element.returnType.getDisplayString(withNullability: true) == w;
+        // final firstParam = element.parameters.firstOrNull?.type
+        //     .getDisplayString(withNullability: false);
+        // return element.parameters.length <= 1 &&
+        //     (firstParam == null || firstParam == bc) &&
+        //     element.returnType.getDisplayString(withNullability: true) == w;
+        // TODO(wasabeef): For Journey
+        return element.returnType.getDisplayString(withNullability: true) == w;
       } else {
         return false;
       }
@@ -113,7 +116,7 @@ ${storiesLibrary.accept(emitter)}
             childBuilder = 'builder: $builder';
           } else {
             scenarioName = 'Scenario';
-            childBuilder = 'child: $builder()';
+            childBuilder = 'child: $builder(null)';
           }
           return '''
 ${a(refer(scenarioName, _playbookUrl))}(
