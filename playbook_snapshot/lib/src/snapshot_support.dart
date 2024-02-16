@@ -3,8 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:playbook/playbook.dart';
-
-import 'snapshot_device.dart';
+import 'package:playbook_snapshot/src/snapshot_device.dart';
 
 class SnapshotSupport {
   static const _maxTryResizeCount = 10;
@@ -15,7 +14,7 @@ class SnapshotSupport {
     WidgetTester tester,
     SnapshotDevice device,
   ) async {
-    tester.binding.window.devicePixelRatioTestValue = 1;
+    tester.view.devicePixelRatio = 1;
     await _setSnapshotSize(tester, device.size);
     await tester.pumpWidget(target);
     await tester.pumpAndSettle();
@@ -40,7 +39,8 @@ class SnapshotSupport {
     if (scenario.layout.needsCompressedResizing) {
       // We use scrollController.maxScrollExtent to calculate the snapshot size.
       // However, maxScrollExtent may report incorrectly.
-      // To solve this, we repeatedly calculate size and update size until we can get a stable value.
+      // To solve this, we repeatedly calculate size and update size until
+      // we can get a stable value.
       var lastExtendedSize = Size(
         scenario.layout.compressedResizingTarget.needResizingWidth
             ? device.size.width
@@ -51,16 +51,31 @@ class SnapshotSupport {
       );
       var resize = 0;
       while (true) {
-        final scrollables = find
-            .byWidgetPredicate((widget) => widget is Scrollable)
-            .evaluate()
-            .map((e) => e.widget as Scrollable);
+        final scrollables =
+            find.byType(Scrollable).evaluate().map((e) => e.widget);
         if (scrollables.isEmpty) break;
 
+        // To obtain the ScrollPosition,
+        // search for ScrollableStates in the innermost widget of Scrollables,
+        // regardless of whether Scrollables have a ScrollController or not.
+        final scrollableStates = scrollables
+            .map(
+              (scrollable) => find
+                  .descendant(
+                    of: find.byWidget(scrollable),
+                    matching: find.byWidgetPredicate((widget) => true),
+                  )
+                  .last
+                  .evaluate()
+                  .map(Scrollable.maybeOf)
+                  .firstWhere((element) => element != null, orElse: () => null),
+            )
+            .where((element) => element != null);
+
         var extendedSize = device.size;
-        for (final scrollable in scrollables) {
+        for (final scrollableState in scrollableStates) {
           extendedSize = _extendScrollableSnapshotSize(
-            scrollable: scrollable,
+            scrollableState: scrollableState!,
             currentExtendedSize: extendedSize,
             originSize: lastExtendedSize,
             resizingTarget: scenario.layout.compressedResizingTarget,
@@ -72,11 +87,16 @@ class SnapshotSupport {
         resize++;
         if (resize >= _maxTryResizeCount) {
           throw StateError(
-              'Try resizing too many times. Please try to set your scenario to have a fixed size.');
+            // ignore: lines_longer_than_80_chars
+            'Try resizing too many times. Please try to set your scenario to have a fixed size.',
+          );
         }
-        if (extendedSize.width >= _maxSnapshotSize || extendedSize.height >= _maxSnapshotSize) {
+        if (extendedSize.width >= _maxSnapshotSize ||
+            extendedSize.height >= _maxSnapshotSize) {
           throw StateError(
-              'Try resizing too large size $extendedSize. Please try to set your scenario to have a fixed size.');
+            // ignore: lines_longer_than_80_chars
+            'Try resizing too large size $extendedSize. Please try to set your scenario to have a fixed size.',
+          );
         }
       }
       snapshotSize = lastExtendedSize;
@@ -90,9 +110,9 @@ class SnapshotSupport {
   static Future<void> precacheAssetImage(
     WidgetTester tester,
   ) async {
-    for (var element in find.byType(Image).evaluate()) {
-      final Image widget = element.widget as Image;
-      final ImageProvider image = widget.image;
+    for (final element in find.byType(Image).evaluate()) {
+      final widget = element.widget as Image;
+      final image = widget.image;
       await precacheImage(image, element);
       await tester.pumpAndSettle();
     }
@@ -100,20 +120,19 @@ class SnapshotSupport {
 
   static Future<void> _setSnapshotSize(WidgetTester tester, Size size) async {
     await tester.binding.setSurfaceSize(size);
-    tester.binding.window.physicalSizeTestValue = size;
+    tester.view.physicalSize = size;
     await tester.pumpAndSettle();
   }
 
   static Size _extendScrollableSnapshotSize({
-    required Scrollable scrollable,
+    required ScrollableState scrollableState,
     required Size currentExtendedSize,
     required Size originSize,
     required _CompressedResizingTarget resizingTarget,
   }) {
-    final controller = scrollable.controller;
     ScrollPosition? position;
     try {
-      position = controller?.position;
+      position = scrollableState.position;
     } catch (_) {}
     if (position == null) {
       return Size(
@@ -133,18 +152,24 @@ class SnapshotSupport {
     switch (scrollAxis) {
       case Axis.horizontal:
         final height = max(originSize.height, currentExtendedSize.height);
-        final width = max(maxScrollExtent + originSize.width, currentExtendedSize.width);
+        final width =
+            max(maxScrollExtent + originSize.width, currentExtendedSize.width);
         newExtendedSize = Size(width, height);
-        break;
       case Axis.vertical:
-        final height = max(maxScrollExtent + originSize.height, currentExtendedSize.height);
+        final height = max(
+          maxScrollExtent + originSize.height,
+          currentExtendedSize.height,
+        );
         final width = max(originSize.width, currentExtendedSize.width);
         newExtendedSize = Size(width, height);
-        break;
     }
     return Size(
-      resizingTarget.needResizingWidth ? newExtendedSize.width : originSize.width,
-      resizingTarget.needResizingHeight ? newExtendedSize.height : originSize.height,
+      resizingTarget.needResizingWidth
+          ? newExtendedSize.width
+          : originSize.width,
+      resizingTarget.needResizingHeight
+          ? newExtendedSize.height
+          : originSize.height,
     );
   }
 }
@@ -163,11 +188,13 @@ extension on ScenarioLayout {
   }
 
   bool get needsCompressedResizing {
-    return _needsCompressedLayoutResizing(v) || _needsCompressedLayoutResizing(h);
+    return _needsCompressedLayoutResizing(v) ||
+        _needsCompressedLayoutResizing(h);
   }
 
   _CompressedResizingTarget get compressedResizingTarget {
-    if (_needsCompressedLayoutResizing(v) && _needsCompressedLayoutResizing(h)) {
+    if (_needsCompressedLayoutResizing(v) &&
+        _needsCompressedLayoutResizing(h)) {
       return _CompressedResizingTarget.both;
     } else if (_needsCompressedLayoutResizing(v)) {
       return _CompressedResizingTarget.vertical;
@@ -209,8 +236,10 @@ enum _CompressedResizingTarget {
 
 extension on _CompressedResizingTarget {
   bool get needResizingWidth =>
-      this == _CompressedResizingTarget.both || this == _CompressedResizingTarget.horizontal;
+      this == _CompressedResizingTarget.both ||
+      this == _CompressedResizingTarget.horizontal;
 
   bool get needResizingHeight =>
-      this == _CompressedResizingTarget.both || this == _CompressedResizingTarget.vertical;
+      this == _CompressedResizingTarget.both ||
+      this == _CompressedResizingTarget.vertical;
 }
